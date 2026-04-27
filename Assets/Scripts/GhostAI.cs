@@ -3,41 +3,69 @@ using UnityEngine.AI;
 
 public class GhostAI : MonoBehaviour
 {
+    [Header("References")]
     public Transform player;
-    private NavMeshAgent agent;
 
-    public float chaseDistance = 8f;
+    [Header("Movement")]
+    public float wanderSpeed = 1.5f;
+    public float huntSpeed = 4f;
+
+    [Header("Wander")]
     public float wanderRadius = 5f;
-    private float wanderTimer = 0f;
     public float wanderInterval = 4f;
 
-    private enum State { Wander, Chase }
+    [Header("Hunt")]
+    public float huntDuration = 8f;    // секунд охотится
+    public float cooldownDuration = 15f; // секунд отдыхает
+
+    private NavMeshAgent agent;
+    private float wanderTimer = 0f;
+    private float phaseTimer = 0f;
+
+    private enum State { Wander, Hunt, Cooldown }
     private State state = State.Wander;
 
     void Start()
     {
-      agent = GetComponent<NavMeshAgent>();
-      if (agent.enabled)
-      SetRandomDestination();
+        agent = GetComponent<NavMeshAgent>();
+        agent.speed = wanderSpeed;
+        if (agent.enabled)
+        {
+            SetRandomDestination();
+            phaseTimer = Random.Range(10f, 20f); // первая охота через 10-20 сек
+        }
     }
 
-   void Update()
+    void Update()
     {
-      if (!agent.enabled) return;
-    
-      float distToPlayer = Vector3.Distance(transform.position, player.position);
+        if (!agent.enabled) return;
 
-      if (distToPlayer < chaseDistance)
-        state = State.Chase;
-      else
-        state = State.Wander;
+        phaseTimer -= Time.deltaTime;
 
-      if (state == State.Chase)
-      {
-        agent.SetDestination(player.position);
-      }
-      else
-      {
+        switch (state)
+        {
+            case State.Wander:
+                HandleWander();
+                if (phaseTimer <= 0f)
+                    StartHunt();
+                break;
+
+            case State.Hunt:
+                agent.SetDestination(player.position);
+                if (phaseTimer <= 0f)
+                    StartCooldown();
+                break;
+
+            case State.Cooldown:
+                HandleWander();
+                if (phaseTimer <= 0f)
+                    StartWander();
+                break;
+        }
+    }
+
+    void HandleWander()
+    {
         wanderTimer += Time.deltaTime;
         if (wanderTimer >= wanderInterval)
         {
@@ -45,7 +73,29 @@ public class GhostAI : MonoBehaviour
             wanderTimer = 0f;
         }
     }
-}
+
+    void StartHunt()
+    {
+        state = State.Hunt;
+        agent.speed = huntSpeed;
+        phaseTimer = huntDuration;
+        Debug.Log("👻 HUNT START");
+    }
+
+    void StartCooldown()
+    {
+        state = State.Cooldown;
+        agent.speed = wanderSpeed;
+        phaseTimer = cooldownDuration;
+        Debug.Log("😴 COOLDOWN");
+    }
+
+    void StartWander()
+    {
+        state = State.Wander;
+        phaseTimer = Random.Range(10f, 20f);
+        Debug.Log("🚶 WANDER");
+    }
 
     void SetRandomDestination()
     {
