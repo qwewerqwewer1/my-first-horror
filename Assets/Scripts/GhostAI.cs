@@ -6,82 +6,108 @@ public class GhostAI : MonoBehaviour
 {
     [Header("References")]
     public Transform player;
+    public Transform[] roomPoints;
 
     [Header("Movement")]
     public float wanderSpeed = 1.5f;
-    public float huntSpeed = 4f;
+    public float huntSpeed = 3f;
 
-    [Header("Wander")]
-    public float wanderRadius = 5f;
-    public float wanderInterval = 4f;
+    [Header("Phases")]
+    public float habitatDuration = 300f;
+    public float huntDuration = 30f;
 
-    [Header("Hunt")]
-    public float huntDuration = 8f;
-    public float cooldownDuration = 15f;
-    public float cooldownFreezeTime = 5f;
+    [Header("Vision")]
+    public float visionRange = 8f;
+    public LayerMask wallMask;
+
+    [Header("Audio")]
+    public AudioClip attackSound;
+    public AudioClip cryingSound;
 
     private NavMeshAgent agent;
     private SkinnedMeshRenderer[] skinnedRenderers;
-    private MeshRenderer[] meshRenderers;
-    private float wanderTimer = 0f;
+    private AudioSource audioSource;
+    private Transform currentRoom;
     private float phaseTimer = 0f;
-    private bool isFrozen = false;
+    private float wanderTimer = 0f;
+    private bool flickerState = false;
 
-    private enum State { Wander, Hunt, Cooldown }
-    private State state = State.Wander;
+    private enum State { Habitat, Hunt }
+    private State state = State.Habitat;
 
     void Start()
     {
         agent = GetComponent<NavMeshAgent>();
         skinnedRenderers = GetComponentsInChildren<SkinnedMeshRenderer>();
-        meshRenderers = GetComponentsInChildren<MeshRenderer>();
-        Debug.Log($"Skinned: {skinnedRenderers.Length} Mesh: {meshRenderers.Length}");
+        audioSource = GetComponent<AudioSource>();
         agent.speed = wanderSpeed;
         SetVisibility(false);
-        if (agent.enabled)
-        {
-            SetRandomDestination();
-            phaseTimer = Random.Range(10f, 20f);
-        }
+        GoToRandomRoom();
+        phaseTimer = habitatDuration;
     }
 
     void Update()
     {
         if (!agent.enabled) return;
-        if (isFrozen) return;
 
         phaseTimer -= Time.deltaTime;
 
         switch (state)
         {
-            case State.Wander:
-                HandleWander();
+            case State.Habitat:
+                HandleHabitat();
                 if (phaseTimer <= 0f)
                     StartHunt();
                 break;
 
             case State.Hunt:
-                agent.SetDestination(player.position);
+                HandleHunt();
                 if (phaseTimer <= 0f)
-                    StartCooldown();
-                break;
-
-            case State.Cooldown:
-                HandleWander();
-                if (phaseTimer <= 0f)
-                    StartWander();
+                    StartHabitat();
                 break;
         }
     }
 
-    void HandleWander()
+    void HandleHabitat()
     {
         wanderTimer += Time.deltaTime;
-        if (wanderTimer >= wanderInterval)
+        if (wanderTimer >= 8f || agent.remainingDistance < 0.5f)
         {
-            SetRandomDestination();
+            Vector3 randomPoint = currentRoom.position +
+                Random.insideUnitSphere * 3f;
+            randomPoint.y = transform.position.y;
+            NavMeshHit hit;
+            if (NavMesh.SamplePosition(randomPoint, out hit, 3f, 1))
+                agent.SetDestination(hit.position);
             wanderTimer = 0f;
         }
+    }
+
+    void HandleHunt()
+    {
+        if (CanSeePlayer())
+        {
+            agent.SetDestination(player.position);
+        }
+        else if (agent.remainingDistance < 0.5f)
+        {
+            Vector3 randomDir = Random.insideUnitSphere * 20f;
+            randomDir += transform.position;
+            NavMeshHit hit;
+            if (NavMesh.SamplePosition(randomDir, out hit, 20f, 1))
+                agent.SetDestination(hit.position);
+        }
+    }
+
+    bool CanSeePlayer()
+    {
+        Vector3 dir = player.position - transform.position;
+        float dist = dir.magnitude;
+        if (dist > visionRange) return false;
+        if (Physics.Raycast(transform.position + Vector3.up,
+            dir.normalized, dist, wallMask))
+            return false;
+        return true;
     }
 
     void StartHunt()
@@ -89,43 +115,51 @@ public class GhostAI : MonoBehaviour
         state = State.Hunt;
         agent.speed = huntSpeed;
         phaseTimer = huntDuration;
+        wanderTimer = 0f;
+        agent.ResetPath();
         StopAllCoroutines();
-        SetVisibility(true);
-        Debug.Log("👻 HUNT START");
+        StartCoroutine(FlickerLoop());
+
+        audioSource.loop = true;
+        audioSource.clip = attackSound;
+        audioSource.Play();
+
+        Debug.Log("👻 HUNT");
     }
 
-    void StartCooldown()
+    void StartHabitat()
     {
-        state = State.Cooldown;
+        state = State.Habitat;
         agent.speed = wanderSpeed;
-        phaseTimer = cooldownDuration;
-        StopAllCoroutines();
-        StartCoroutine(CooldownSequence());
-        Debug.Log("😴 COOLDOWN");
-    }
-
-    void StartWander()
-    {
-        state = State.Wander;
+        phaseTimer = habitatDuration;
+        wanderTimer = 0f;
         StopAllCoroutines();
         SetVisibility(false);
-        phaseTimer = Random.Range(10f, 20f);
-        Debug.Log("🚶 WANDER");
+        GoToRandomRoom();
+
+        audioSource.loop = false;
+        audioSource.Stop();
+        if (cryingSound != null)
+            audioSource.PlayOneShot(cryingSound);
+
+        Debug.Log("🏠 HABITAT");
     }
 
-    IEnumerator CooldownSequence()
+    void GoToRandomRoom()
     {
-        isFrozen = true;
-        agent.ResetPath();
-        float freezeTimer = 0f;
-        while (freezeTimer < cooldownFreezeTime)
+        if (roomPoints == null || roomPoints.Length == 0) return;
+        currentRoom = roomPoints[Random.Range(0, roomPoints.Length)];
+        agent.SetDestination(currentRoom.position);
+    }
+
+    IEnumerator FlickerLoop()
+    {
+        while (state == State.Hunt)
         {
-            bool current = skinnedRenderers[0].enabled;
-            SetVisibility(!current);
-            yield return new WaitForSeconds(Random.Range(0.1f, 0.4f));
-            freezeTimer += 0.25f;
+            flickerState = !flickerState;
+            SetVisibility(flickerState);
+            yield return new WaitForSeconds(0.15f);
         }
-        isFrozen = false;
         SetVisibility(false);
     }
 
@@ -133,16 +167,5 @@ public class GhostAI : MonoBehaviour
     {
         foreach (var r in skinnedRenderers)
             r.enabled = visible;
-        foreach (var r in meshRenderers)
-            r.enabled = visible;
-    }
-
-    void SetRandomDestination()
-    {
-        Vector3 randomDir = Random.insideUnitSphere * wanderRadius;
-        randomDir += transform.position;
-        NavMeshHit hit;
-        if (NavMesh.SamplePosition(randomDir, out hit, wanderRadius, 1))
-            agent.SetDestination(hit.position);
     }
 }
