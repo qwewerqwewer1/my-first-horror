@@ -158,7 +158,7 @@ public class GhostAI : MonoBehaviour
         {
             flickerState = !flickerState;
             SetVisibility(flickerState);
-            yield return new WaitForSeconds(0.15f);
+            yield return new WaitForSeconds(Random.Range(0.05f, 0.6f));
         }
         SetVisibility(false);
     }
@@ -167,5 +167,10 @@ public class GhostAI : MonoBehaviour
     {
         foreach (var r in skinnedRenderers)
             r.enabled = visible;
+    }
+
+    public bool IsHunting()
+    {
+        return state == State.Hunt;
     }
 }

@@ -10,7 +10,7 @@ public class PlayerController : MonoBehaviour
     public Transform cameraHolder;
 
     private Rigidbody rb;
-    private float verticalRotation = 0f;
+    public float verticalRotation = 0f;
 
     void Start()
     {
@@ -38,7 +38,6 @@ public class PlayerController : MonoBehaviour
         HandleFootstepAudio();
     }
 
-    // Камера ВСЕГДА последней — после всей физики
     void LateUpdate()
     {
         if (Cursor.lockState == CursorLockMode.Locked)
@@ -83,6 +82,5 @@ public class PlayerController : MonoBehaviour
 
         verticalRotation -= mouseY;
         verticalRotation = Mathf.Clamp(verticalRotation, -80f, 80f);
-        cameraHolder.localRotation = Quaternion.Euler(verticalRotation, 0f, 0f);
     }
 }

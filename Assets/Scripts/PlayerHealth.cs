@@ -7,13 +7,14 @@ public class PlayerHealth : MonoBehaviour
     {
         if (other.CompareTag("Ghost"))
         {
-            Die();
+            GhostAI ghost = other.GetComponent<GhostAI>();
+            if (ghost != null && ghost.IsHunting())
+                Die();
         }
     }
 
     void Die()
     {
-        // Пока просто перезагружаем сцену
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 }
