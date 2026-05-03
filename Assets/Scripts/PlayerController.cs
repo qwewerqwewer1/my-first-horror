@@ -2,85 +2,48 @@ using UnityEngine;
 
 public class PlayerController : MonoBehaviour
 {
-    [Header("Movement")]
-    public float moveSpeed = 3f;
-    public float mouseSensitivity = 2f;
+    [Header("Basics Movements")] public float basicSpeed = 5f;
+    public float basicSens = 2f;
+    private float _mouseXRotation;
 
-    [Header("References")]
-    public Transform cameraHolder;
-
-    private Rigidbody rb;
-    public float verticalRotation = 0f;
+    [Header("Links")] public Transform cameraRoot;
+    private Rigidbody _rigidbodyPlayer;
 
     void Start()
     {
-        rb = GetComponent<Rigidbody>();
+        _rigidbodyPlayer = GetComponent<Rigidbody>();
+        _rigidbodyPlayer.freezeRotation = true;
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
 
-    void Update()
-    {
-        if (Input.GetKeyDown(KeyCode.Escape))
-        {
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
-            return;
-        }
-
-        if (Input.GetMouseButtonDown(0) && Cursor.lockState == CursorLockMode.None)
-        {
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
-            return;
-        }
-
-        HandleFootstepAudio();
-    }
-
-    void LateUpdate()
-    {
-        if (Cursor.lockState == CursorLockMode.Locked)
-            HandleMouseLook();
-    }
-
     void FixedUpdate()
     {
-        HandleMovement();
+        var ws = Input.GetAxis("Vertical");
+        var ad = Input.GetAxis("Horizontal");
+
+        var moveInput = transform.forward * ws + transform.right * ad;
+
+        if (moveInput.magnitude > 1f) moveInput.Normalize();
+
+        _rigidbodyPlayer.linearVelocity = new Vector3(
+            moveInput.x * basicSpeed,
+            _rigidbodyPlayer.linearVelocity.y,
+            moveInput.z * basicSpeed
+        );
+
+        _rigidbodyPlayer.angularVelocity = Vector3.zero;
     }
 
-    void HandleMovement()
+    private void LateUpdate()
     {
-        float h = Input.GetAxisRaw("Horizontal");
-        float v = Input.GetAxisRaw("Vertical");
+        var mouseX = Input.GetAxis("Mouse X") * basicSens;
+        var mouseY = Input.GetAxis("Mouse Y") * basicSens;
 
-        Vector3 dir = (transform.forward * v + transform.right * h).normalized;
-        Vector3 velocity = dir * moveSpeed;
-        velocity.y = rb.linearVelocity.y;
+        transform.Rotate(Vector3.up * mouseX);
 
-        rb.linearVelocity = velocity;
-    }
-
-    void HandleFootstepAudio()
-    {
-        AudioSource audio = GetComponent<AudioSource>();
-        float h = Input.GetAxisRaw("Horizontal");
-        float v = Input.GetAxisRaw("Vertical");
-
-        if ((h != 0 || v != 0) && !audio.isPlaying)
-            audio.Play();
-        else if (h == 0 && v == 0 && audio.isPlaying)
-            audio.Stop();
-    }
-
-    void HandleMouseLook()
-    {
-        float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
-        float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
-
-        transform.Rotate(0f, mouseX, 0f);
-
-        verticalRotation -= mouseY;
-        verticalRotation = Mathf.Clamp(verticalRotation, -80f, 80f);
+        _mouseXRotation -= mouseY;
+        _mouseXRotation = Mathf.Clamp(_mouseXRotation, -90f, 90f);
+        cameraRoot.localRotation = Quaternion.Euler(_mouseXRotation, 0f, 0f);
     }
 }

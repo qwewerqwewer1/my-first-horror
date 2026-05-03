@@ -1,11 +1,10 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.AI;
-using System.Collections;
 
 public class GhostAI : MonoBehaviour
 {
-    [Header("References")]
-    public Transform player;
+    [Header("References")] public Transform target;
     public Transform[] roomPoints;
 
     [Header("Movement")]
@@ -24,62 +23,64 @@ public class GhostAI : MonoBehaviour
     public AudioClip attackSound;
     public AudioClip cryingSound;
 
-    private NavMeshAgent agent;
-    private SkinnedMeshRenderer[] skinnedRenderers;
-    private AudioSource audioSource;
-    private Transform currentRoom;
-    private float phaseTimer = 0f;
-    private float wanderTimer = 0f;
-    private bool flickerState = false;
+    private NavMeshAgent _agent;
+    private SkinnedMeshRenderer[] _skinnedRenderers;
+    private AudioSource _audioSource;
+    private Transform _currentRoom;
+    private float _phaseTimer;
+    private float _wanderTimer;
+    private bool _flickerState;
 
     private enum State { Habitat, Hunt }
-    private State state = State.Habitat;
+
+    private State _state = State.Habitat;
 
     void Start()
     {
-        agent = GetComponent<NavMeshAgent>();
-        skinnedRenderers = GetComponentsInChildren<SkinnedMeshRenderer>();
-        audioSource = GetComponent<AudioSource>();
-        agent.speed = wanderSpeed;
+        _agent = GetComponent<NavMeshAgent>();
+        _skinnedRenderers = GetComponentsInChildren<SkinnedMeshRenderer>();
+        _audioSource = GetComponent<AudioSource>();
+        _agent.speed = wanderSpeed;
         SetVisibility(false);
         GoToRandomRoom();
-        phaseTimer = habitatDuration;
+        _phaseTimer = habitatDuration;
     }
 
     void Update()
     {
-        if (!agent.enabled) return;
+        if (!_agent.enabled) return;
 
-        phaseTimer -= Time.deltaTime;
+        _phaseTimer -= Time.deltaTime;
 
-        switch (state)
+        switch (_state)
         {
             case State.Habitat:
                 HandleHabitat();
-                if (phaseTimer <= 0f)
+                if (_phaseTimer <= 0f)
                     StartHunt();
                 break;
 
             case State.Hunt:
                 HandleHunt();
-                if (phaseTimer <= 0f)
+                if (_phaseTimer <= 0f)
                     StartHabitat();
                 break;
         }
     }
 
+   
+
     void HandleHabitat()
     {
-        wanderTimer += Time.deltaTime;
-        if (wanderTimer >= 8f || agent.remainingDistance < 0.5f)
+        _wanderTimer += Time.deltaTime;
+        if (_wanderTimer >= 8f || _agent.remainingDistance < 0.5f)
         {
-            Vector3 randomPoint = currentRoom.position +
-                Random.insideUnitSphere * 3f;
+            var randomPoint = _currentRoom.position +
+                              Random.insideUnitSphere * 3f;
             randomPoint.y = transform.position.y;
-            NavMeshHit hit;
-            if (NavMesh.SamplePosition(randomPoint, out hit, 3f, 1))
-                agent.SetDestination(hit.position);
-            wanderTimer = 0f;
+            if (NavMesh.SamplePosition(randomPoint, out var hit, 3f, 1))
+                _agent.SetDestination(hit.position);
+            _wanderTimer = 0f;
         }
     }
 
@@ -87,21 +88,20 @@ public class GhostAI : MonoBehaviour
     {
         if (CanSeePlayer())
         {
-            agent.SetDestination(player.position);
+            _agent.SetDestination(target.position);
         }
-        else if (agent.remainingDistance < 0.5f)
+        else if (_agent.remainingDistance < 0.5f)
         {
             Vector3 randomDir = Random.insideUnitSphere * 20f;
             randomDir += transform.position;
-            NavMeshHit hit;
-            if (NavMesh.SamplePosition(randomDir, out hit, 20f, 1))
-                agent.SetDestination(hit.position);
+            if (NavMesh.SamplePosition(randomDir, out var hit, 20f, 1))
+                _agent.SetDestination(hit.position);
         }
     }
 
     bool CanSeePlayer()
     {
-        Vector3 dir = player.position - transform.position;
+        var dir = target.position - transform.position;
         float dist = dir.magnitude;
         if (dist > visionRange) return false;
         if (Physics.Raycast(transform.position + Vector3.up,
@@ -112,35 +112,41 @@ public class GhostAI : MonoBehaviour
 
     void StartHunt()
     {
-        state = State.Hunt;
-        agent.speed = huntSpeed;
-        phaseTimer = huntDuration;
-        wanderTimer = 0f;
-        agent.ResetPath();
+        _state = State.Hunt;
+        _agent.speed = huntSpeed;
+        _phaseTimer = huntDuration;
+        _wanderTimer = 0f;
+        _agent.ResetPath();
         StopAllCoroutines();
         StartCoroutine(FlickerLoop());
 
-        audioSource.loop = true;
-        audioSource.clip = attackSound;
-        audioSource.Play();
+        if (_audioSource != null)
+        {
+            _audioSource.loop = true;
+            _audioSource.clip = attackSound;
+            _audioSource.Play();
+        }
 
         Debug.Log("👻 HUNT");
     }
 
     void StartHabitat()
     {
-        state = State.Habitat;
-        agent.speed = wanderSpeed;
-        phaseTimer = habitatDuration;
-        wanderTimer = 0f;
+        _state = State.Habitat;
+        _agent.speed = wanderSpeed;
+        _phaseTimer = habitatDuration;
+        _wanderTimer = 0f;
         StopAllCoroutines();
         SetVisibility(false);
         GoToRandomRoom();
 
-        audioSource.loop = false;
-        audioSource.Stop();
-        if (cryingSound != null)
-            audioSource.PlayOneShot(cryingSound);
+        if (_audioSource != null)
+        {
+            _audioSource.loop = false;
+            _audioSource.Stop();
+            if (cryingSound != null)
+                _audioSource.PlayOneShot(cryingSound);
+        }
 
         Debug.Log("🏠 HABITAT");
     }
@@ -148,29 +154,32 @@ public class GhostAI : MonoBehaviour
     void GoToRandomRoom()
     {
         if (roomPoints == null || roomPoints.Length == 0) return;
-        currentRoom = roomPoints[Random.Range(0, roomPoints.Length)];
-        agent.SetDestination(currentRoom.position);
+        _currentRoom = roomPoints[Random.Range(0, roomPoints.Length)];
+        _agent.SetDestination(_currentRoom.position);
+        _wanderTimer = 0f;
     }
 
     IEnumerator FlickerLoop()
     {
-        while (state == State.Hunt)
+        while (_state == State.Hunt)
         {
-            flickerState = !flickerState;
-            SetVisibility(flickerState);
+            _flickerState = !_flickerState;
+            SetVisibility(_flickerState);
             yield return new WaitForSeconds(Random.Range(0.05f, 0.6f));
         }
         SetVisibility(false);
     }
 
+    
+
     void SetVisibility(bool visible)
     {
-        foreach (var r in skinnedRenderers)
+        foreach (var r in _skinnedRenderers)
             r.enabled = visible;
     }
 
     public bool IsHunting()
     {
-        return state == State.Hunt;
+        return _state == State.Hunt;
     }
 }
