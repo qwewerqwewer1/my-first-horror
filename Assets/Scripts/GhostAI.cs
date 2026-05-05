@@ -4,8 +4,8 @@ using UnityEngine.AI;
 
 public class GhostAI : MonoBehaviour
 {
-    [Header("References")] public Transform target;
-    public Transform[] roomPoints;
+    [Header("References")] 
+    public Transform target;
 
     [Header("Movement")]
     public float wanderSpeed = 1.5f;
@@ -23,46 +23,45 @@ public class GhostAI : MonoBehaviour
     public AudioClip attackSound;
     public AudioClip cryingSound;
 
-    private NavMeshAgent _agent;
-    private SkinnedMeshRenderer[] _skinnedRenderers;
-    private AudioSource _audioSource;
-    private Transform _currentRoom;
-    private float _phaseTimer;
-    private float _wanderTimer;
-    private bool _flickerState;
+    private NavMeshAgent agent;
+    private SkinnedMeshRenderer[] skinnedRenderers;
+    private AudioSource audioSource;
+    private Transform currentRoom;
+    private float phaseTimer;
+    private float wanderTimer;
+    private bool flickerState;
 
     private enum State { Habitat, Hunt }
 
-    private State _state = State.Habitat;
+    private State state = State.Habitat;
 
     void Start()
     {
-        _agent = GetComponent<NavMeshAgent>();
-        _skinnedRenderers = GetComponentsInChildren<SkinnedMeshRenderer>();
-        _audioSource = GetComponent<AudioSource>();
-        _agent.speed = wanderSpeed;
+        agent = GetComponent<NavMeshAgent>();
+        skinnedRenderers = GetComponentsInChildren<SkinnedMeshRenderer>();
+        audioSource = GetComponent<AudioSource>();
+        agent.speed = wanderSpeed;
         SetVisibility(false);
-        GoToRandomRoom();
-        _phaseTimer = habitatDuration;
+        phaseTimer = habitatDuration;
     }
 
     void Update()
     {
-        if (!_agent.enabled) return;
+        if (!agent.enabled) return;
 
-        _phaseTimer -= Time.deltaTime;
+        phaseTimer -= Time.deltaTime;
 
-        switch (_state)
+        switch (state)
         {
             case State.Habitat:
                 HandleHabitat();
-                if (_phaseTimer <= 0f)
+                if (phaseTimer <= 0f)
                     StartHunt();
                 break;
 
             case State.Hunt:
                 HandleHunt();
-                if (_phaseTimer <= 0f)
+                if (phaseTimer <= 0f)
                     StartHabitat();
                 break;
         }
@@ -72,15 +71,15 @@ public class GhostAI : MonoBehaviour
 
     void HandleHabitat()
     {
-        _wanderTimer += Time.deltaTime;
-        if (_wanderTimer >= 8f || _agent.remainingDistance < 0.5f)
+        wanderTimer += Time.deltaTime;
+        if (wanderTimer >= 8f || agent.remainingDistance < 0.5f)
         {
-            var randomPoint = _currentRoom.position +
+            var randomPoint = currentRoom.position +
                               Random.insideUnitSphere * 3f;
             randomPoint.y = transform.position.y;
             if (NavMesh.SamplePosition(randomPoint, out var hit, 3f, 1))
-                _agent.SetDestination(hit.position);
-            _wanderTimer = 0f;
+                agent.SetDestination(hit.position);
+            wanderTimer = 0f;
         }
     }
 
@@ -88,14 +87,14 @@ public class GhostAI : MonoBehaviour
     {
         if (CanSeePlayer())
         {
-            _agent.SetDestination(target.position);
+            agent.SetDestination(target.position);
         }
-        else if (_agent.remainingDistance < 0.5f)
+        else if (agent.remainingDistance < 0.5f)
         {
             Vector3 randomDir = Random.insideUnitSphere * 20f;
             randomDir += transform.position;
             if (NavMesh.SamplePosition(randomDir, out var hit, 20f, 1))
-                _agent.SetDestination(hit.position);
+                agent.SetDestination(hit.position);
         }
     }
 
@@ -112,19 +111,19 @@ public class GhostAI : MonoBehaviour
 
     void StartHunt()
     {
-        _state = State.Hunt;
-        _agent.speed = huntSpeed;
-        _phaseTimer = huntDuration;
-        _wanderTimer = 0f;
-        _agent.ResetPath();
+        state = State.Hunt;
+        agent.speed = huntSpeed;
+        phaseTimer = huntDuration;
+        wanderTimer = 0f;
+        agent.ResetPath();
         StopAllCoroutines();
         StartCoroutine(FlickerLoop());
 
-        if (_audioSource != null)
+        if (audioSource != null)
         {
-            _audioSource.loop = true;
-            _audioSource.clip = attackSound;
-            _audioSource.Play();
+            audioSource.loop = true;
+            audioSource.clip = attackSound;
+            audioSource.Play();
         }
 
         Debug.Log("👻 HUNT");
@@ -132,39 +131,30 @@ public class GhostAI : MonoBehaviour
 
     void StartHabitat()
     {
-        _state = State.Habitat;
-        _agent.speed = wanderSpeed;
-        _phaseTimer = habitatDuration;
-        _wanderTimer = 0f;
+        state = State.Habitat;
+        agent.speed = wanderSpeed;
+        phaseTimer = habitatDuration;
+        wanderTimer = 0f;
         StopAllCoroutines();
         SetVisibility(false);
-        GoToRandomRoom();
 
-        if (_audioSource != null)
+        if (audioSource != null)
         {
-            _audioSource.loop = false;
-            _audioSource.Stop();
+            audioSource.loop = false;
+            audioSource.Stop();
             if (cryingSound != null)
-                _audioSource.PlayOneShot(cryingSound);
+                audioSource.PlayOneShot(cryingSound);
         }
 
         Debug.Log("🏠 HABITAT");
     }
 
-    void GoToRandomRoom()
-    {
-        if (roomPoints == null || roomPoints.Length == 0) return;
-        _currentRoom = roomPoints[Random.Range(0, roomPoints.Length)];
-        _agent.SetDestination(_currentRoom.position);
-        _wanderTimer = 0f;
-    }
-
     IEnumerator FlickerLoop()
     {
-        while (_state == State.Hunt)
+        while (state == State.Hunt)
         {
-            _flickerState = !_flickerState;
-            SetVisibility(_flickerState);
+            flickerState = !flickerState;
+            SetVisibility(flickerState);
             yield return new WaitForSeconds(Random.Range(0.05f, 0.6f));
         }
         SetVisibility(false);
@@ -174,12 +164,12 @@ public class GhostAI : MonoBehaviour
 
     void SetVisibility(bool visible)
     {
-        foreach (var r in _skinnedRenderers)
+        foreach (var r in skinnedRenderers)
             r.enabled = visible;
     }
 
     public bool IsHunting()
     {
-        return _state == State.Hunt;
+        return state == State.Hunt;
     }
 }

@@ -5,7 +5,7 @@ public class FlashlightController : MonoBehaviour
     public Light flashlight;
     private bool isOn = true;
 
-    void Update()
+    private void Update()
     {
         if (Input.GetKeyDown(KeyCode.F))
         {
